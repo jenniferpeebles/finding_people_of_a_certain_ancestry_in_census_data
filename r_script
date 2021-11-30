@@ -1,0 +1,150 @@
+---
+title: "Find People of One Ancestry in Census Data"
+author: "Jennifer Peebles-The Atlanta Journal-Constitution"
+date: "`r format(Sys.time(), '%b. %d, %Y')`"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+
+# If you don't have these packages installed, you can install them here.
+# Note: Some of the packages specifically named here are included in the tidyverse package, so this list is duplicative. I will try to fix this in a revision. My apologies.
+# install.packages(c(dplyr", "stringr"))
+# install.packages("tidyverse")
+# install.packages("digest")
+# install.packages("tidycensus")
+
+# Now, load a ton of libraries
+
+library(digest)
+library(dplyr)
+library(grid)
+library(janitor)
+library(knitr)
+library(magrittr)
+library(stringr)
+library(swirl)
+library(tidycensus)
+library(tidyverse)
+
+# You will need to put in your Census API key here in line below
+#census_api_key("your_Census_API_key_goes_here_between_the_quote_marks")
+
+# This is for knitr
+knitr::opts_chunk$set(echo = TRUE)
+
+# This will round off the digits to one decimal point. 
+options(digits=1)
+
+# This will prevent R from outputting numbers in scientific notation. You probably don't need this, but I tend to include it. 
+options(scipen = 999)
+
+```
+
+
+```{r more_setup, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALSE}
+
+# If you want to clear out all the variables in your R workspace, I like to do this, you don't have to
+# rm(list=ls()) 
+
+# set today's date
+todays_date <- format(Sys.Date(), "%m-%d-%Y")
+
+# Show my working directory
+getwd()
+
+# You can use this to set up the correct working directory here if you haven't elsewhere ... This is where you would put in the file path to your working directory. 
+# base_wd <- "C:/Users/... [SET_DIRECTORY_HERE]"
+
+# This would actually set the new working directory. Leave this commented-out if you don't want to change it. 
+# setwd(base_wd)
+
+# Show my working directory to make sure it has updated to the new folder. 
+getwd()
+
+```
+
+```{r pull_in_variables, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALS}
+summary(cars)
+
+var19 <- load_variables(2019, "acs5", cache = TRUE)
+
+str(var19)
+
+var19 %>% filter(str_detect(label, "Scot"))
+
+```
+
+```{r pressure, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALS}
+# change this to whatever "our ancestry" is what we want information about. 
+our_ancestry <- "Hungarian"
+
+our_ancestry <- "Scottish"
+
+v19 <- load_variables(2019, "acs5", cache = TRUE)
+
+head(v19)
+
+# Note: The underscore here MUST be in here, 
+# NOTE: ALL THE ANCESTRIES ARE IN THIS ONE TABLE. However, this table (B04004) is only for people declaring one single ancestry. There are other Census tables that look at people who claim multiple ancestries. 
+our_table <- "B04004_"
+
+# Table B04004 is "People Reporting Single Ancestry"
+v19a <- v19 %>%  filter(str_detect(name, our_table)) %>%  print()
+
+# View(v19a)
+
+# Save the number of variables in the table. 
+num_of_variables <- nrow(v19a) %>%  print()
+
+# This will help us generate our variables, because hoo-boy, there are a lot of them
+i <- 1
+varlist <- c()
+
+while (i<=num_of_variables) {
+    varlist <- c(varlist, i)
+    i <- i+1
+    
+}
+
+# This creates the list of variables
+varlist_full <- paste(our_table, str_pad(varlist, 3, pad="0"), sep="") %>%  print()
+
+# Now let's ping the Census API using tidycensus and download our variables. 
+us_ancestries <- get_acs(geography = "us", year = 2019, survey = "acs5", variables = varlist_full, geometry = FALSE)  %>%  print()
+
+variable_labels <- data.frame(v19a[,c(1:2)]) %>%  print()
+
+colnames(variable_labels) <- c("name", "variable") %>%  print()
+
+# Marry our data table to our list of variable names
+us_ancestries2 <- merge(x = us_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>%  print()
+
+us_ancestries_totals <- us_ancestries2
+
+# Save the total American population estimate as a variable because we might need it later. BUT keep in mind, the total here is people who claim to be of one ancestry, and many Americans claim multiple ancestries. 
+us_total_pop <- us_ancestries_totals %>% rename(label=variable.y) %>%  filter(label=="Estimate!!Total:") %>%  pull(estimate) %>%  print()
+
+# Do pivot_wider on the table we just made. 
+us_total_ancestries2 <- us_ancestries_totals %>% select(-GEOID, -NAME, -variable, -moe) %>% rename(label=variable.y) %>% pivot_wider(names_from=label, values_from = c(estimate), names_sep="_") %>%  janitor::clean_names() %>% print()
+
+# Fix our column names
+colnames(us_total_ancestries2) <- gsub("estimate_estimate", "estimate", colnames(us_total_ancestries2))
+
+# Now to calculate percentages for each ancestry. Keep in mind, the total figure we're using is the total number of people claiming single ancestry, so the percentages will be the percentage of Americans claiming single ancestry who said they are of XYZ ancestry. 
+pct_us_ancestries <- us_total_ancestries2 %>% mutate(across(2:108, ~ (.x/us_total_ancestries2$estimate_total)*100)) %>%  print()
+
+# Update the column names
+names(pct_us_ancestries)[c(2:108)] <- gsub("estimate", "pct", names(pct_us_ancestries)[c(2:108)]) %>%  print()
+
+head(pct_us_ancestries)
+
+# Now we can see the table.
+View(pct_us_ancestries)
+
+
+```
+
+#30
