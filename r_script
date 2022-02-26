@@ -1,5 +1,5 @@
 ---
-title: "Find People of One Ancestry in Census Data"
+title: "Find People of a Given Ancestry in Census Data"
 author: "Jennifer Peebles-The Atlanta Journal-Constitution"
 date: "`r format(Sys.time(), '%b. %d, %Y')`"
 output: html_document
@@ -7,21 +7,11 @@ editor_options:
   chunk_output_type: console
 ---
 
-```{r setup, include=FALSE, echo=FALSE, warning=FALSE, message=FALSE, error=FALSE}
-
-# If you don't have these packages installed, you can install them here.
-# Note: Some of the packages specifically named here are included in the tidyverse package, so this list is duplicative. I will try to fix this in a revision. My apologies.
-# install.packages(c(dplyr", "stringr"))
-# install.packages("tidyverse")
-# install.packages("digest")
-# install.packages("tidycensus")
-
-# Now, load a ton of libraries
+```{r setup, include=FALSE}
 
 library(digest)
 library(dplyr)
 library(grid)
-library(janitor)
 library(knitr)
 library(magrittr)
 library(stringr)
@@ -29,36 +19,34 @@ library(swirl)
 library(tidycensus)
 library(tidyverse)
 
-# You will need to put in your Census API key here in line below
-#census_api_key("your_Census_API_key_goes_here_between_the_quote_marks")
+# You should put in your Census API key here in line below
+# census_api_key("your_Census_API_key_goes_here_between_the_quote_marks")
+# You can also install it with these attributes but I'll leave this commented-out in case you prefer not to set these attributes.
+# census_api_key("your_Census_API_key_goes_here_between_quote_marks", install=TRUE, overwrite=TRUE)
 
-# This is for knitr
+# This seems to pop up in every new R Markdown script I create. So I just left it there. 
 knitr::opts_chunk$set(echo = TRUE)
 
-# This will round off the digits to one decimal point. 
+# This will round off everything to 1 digit
 options(digits=1)
 
-# This will prevent R from outputting numbers in scientific notation. You probably don't need this, but I tend to include it. 
+# This will prevent R from expressing very large or very small numbers in scientific notation. This probably won't be an issue in this script but I always try to set this anyhow. 
 options(scipen = 999)
 
 ```
 
+```{r setup_our_working_directory, eval=TRUE, echo=FALSE, include=FALSE}
 
-```{r more_setup, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALSE}
-
-# If you want to clear out all the variables in your R workspace, I like to do this, you don't have to
+# If you want to clear out all the variables in your R workspace, I like to do this, you don't have to. I've left this item commented-out for now. 
 # rm(list=ls()) 
-
-# set today's date
-todays_date <- format(Sys.Date(), "%m-%d-%Y")
 
 # Show my working directory
 getwd()
 
-# You can use this to set up the correct working directory here if you haven't elsewhere ... This is where you would put in the file path to your working directory. 
-# base_wd <- "C:/Users/... [SET_DIRECTORY_HERE]"
+# If you want to change your working directory, you can do it here. Paste in your file path between these quote marks first ... But I'll otherwise leave this commented-out.
+#base_wd <- "Paste/In/Your/File/Path/Here/And/Dont/Forget/to/Switch/Your/Backslashes/to/Forwardslashes/or/Else/R/CAnt/Read/It"
 
-# This would actually set the new working directory. Leave this commented-out if you don't want to change it. 
+# And this next line would actually change your working directory to whatever you've stored in base_wd. 
 # setwd(base_wd)
 
 # Show my working directory to make sure it has updated to the new folder. 
@@ -66,85 +54,197 @@ getwd()
 
 ```
 
-```{r pull_in_variables, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALS}
-summary(cars)
+```{r start_with_variables, include=FALSE, eval=TRUE, echo=FALSE}
 
-var19 <- load_variables(2019, "acs5", cache = TRUE)
+# Let's start by setting some variables. For "our_ancestry," set this to the ancestry we want to pull Census data about. This can be a nation-state, a continent or a region, such as "Eastern Europe." I believe the Census lists some ancestries by continent, by region or by country. Note that this is generally written like an adjective, not as a noun or as the name of the country. So, "Hungarian" will work, but "Hungary" will not. "Scottish" will work but "Scotland" or "Scot" will not. 
 
-str(var19)
+our_ancestry <- "Ukrainian"
 
-var19 %>% filter(str_detect(label, "Scot"))
+# Fill in the next 3 with your state and major city information.
+
+our_state <- "Georgia"
+
+our_state_abbreviation <-  "GA" # Make this your two-letter abbreviation
+
+our_major_city <- "Atlanta" # We'll use this to grab MSA-level data. 
+
+# Set our_data_year to whatever the year of the appropriate Census release that you want to pull from tidycensus. 
+our_data_year <- 2019
+
+# Set this to whatever Census product we want to pull data from with tidycensus. I often use acs5, for the 5-year averages of the American Community Survey, because I live and work in Georgia (the U.S. state, not the country), and I'm often asked by colleagues to pull data concerning towns with populations lower than the 60,000-person threshold for the 1-year ACS. But you can choose. To see all the options on this, check the tidycensus documentation at https://walker-data.com/tidycensus/articles/basic-usage.html#working-with-acs-data-1. 
+
+our_survey <- "acs5" %>% print()
 
 ```
 
-```{r pressure, eval=TRUE, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE, error=FALS}
-# change this to whatever "our ancestry" is what we want information about. 
-our_ancestry <- "Hungarian"
 
-our_ancestry <- "Scottish"
+```{r national_level_stats, include=FALSE, eval=TRUE, echo=FALSE}
 
-v19 <- load_variables(2019, "acs5", cache = TRUE)
+# Let's pull down the ACS variables using tidycensus. We'll be using the 2019 data release and we'll be using the ACS 5-year. 
+var19 <- load_variables(our_data_year, our_survey, cache = TRUE) %>% print()
 
-head(v19)
+# Since we're posting this at the beginning of the Russian invasion of Ukraine, and we're looking for Americans with Ukrainian heritage, let's go on and check to make sure ... Is there a category in here broken down for people of Ukrainian ancestry? Let's check ...
+var19 %>% filter(str_detect(label, substr(our_ancestry, 1,3)))
 
-# Note: The underscore here MUST be in here, 
-# NOTE: ALL THE ANCESTRIES ARE IN THIS ONE TABLE. However, this table (B04004) is only for people declaring one single ancestry. There are other Census tables that look at people who claim multiple ancestries. 
-our_table <- "B04004_"
+# ... And the answer is, yes, there is. There's a variable for "Estimate!!Total:!!Ukrainian". So let's proceed. But you can see all the variables and possibilities for ancestries in the data here: https://censusreporter.org/tables/B04006/
 
-# Table B04004 is "People Reporting Single Ancestry"
-v19a <- v19 %>%  filter(str_detect(name, our_table)) %>%  print()
+# Let's save as a variable the number of the table we're going to be pulling from the ACS. Table B04006 is "People Reporting Ancestry." (B04004 is "People Reporting Single Ancestry" and B04004 is people reporting multiple ancestries.) Let's use B04006. NOTE: ALL THE ANCESTRIES ARE IN THIS ONE TABLE. 
+our_table <- "B04006"
 
-# View(v19a)
+# Let's filter the variables down to the one table we want.
+v19a <- var19 %>%  filter(str_detect(name, our_table)) %>%  print()
 
-# Save the number of variables in the table. 
-num_of_variables <- nrow(v19a) %>%  print()
+# Pull out the variable for our chosen ancestry
+our_ancestry_variable <- (v19a %>% filter(str_detect(label, our_ancestry))) %>% pull(name) %>% print()
 
-# This will help us generate our variables, because hoo-boy, there are a lot of them
-i <- 1
-varlist <- c()
+# Pull out the variable for the total population field in that table, so that we can eventually use it to calculate a percentage. 
+total_pop_variable <- (v19a %>% filter(label=="Estimate!!Total:")) %>% pull(name) %>% print()
 
-while (i<=num_of_variables) {
-    varlist <- c(varlist, i)
-    i <- i+1
-    
-}
+# Save a list of the two variables we want: the number of people of our given ancestry, and the total population variable. 
+varlist <- c(our_ancestry_variable, total_pop_variable) %>% print()
 
-# This creates the list of variables
-varlist_full <- paste(our_table, str_pad(varlist, 3, pad="0"), sep="") %>%  print()
+# Now let's ping the Census API using tidycensus and download the data for our variables for national-level statistics. 
+us_ancestries <- get_acs(geography = "us", year = our_data_year, survey = paste0(our_survey), variables = varlist, geometry = FALSE)  %>%  print()
 
-# Now let's ping the Census API using tidycensus and download our variables. 
-us_ancestries <- get_acs(geography = "us", year = 2019, survey = "acs5", variables = varlist_full, geometry = FALSE)  %>%  print()
-
+# Save the variable labels as a small table so we can join it to our us_ancestries table in a minute.
 variable_labels <- data.frame(v19a[,c(1:2)]) %>%  print()
 
+# Rename the columns in variable_labels so that they are easier to fool with.
 colnames(variable_labels) <- c("name", "variable") %>%  print()
 
-# Marry our data table to our list of variable names
-us_ancestries2 <- merge(x = us_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>%  print()
+# Merge (R's word for a SQL join) us_ancestries with the variable_labels table. 
+us_ancestries_totals <- merge(x = us_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>%  print()
 
-us_ancestries_totals <- us_ancestries2
-
-# Save the total American population estimate as a variable because we might need it later. BUT keep in mind, the total here is people who claim to be of one ancestry, and many Americans claim multiple ancestries. 
+# Save the total American population as a variable 
 us_total_pop <- us_ancestries_totals %>% rename(label=variable.y) %>%  filter(label=="Estimate!!Total:") %>%  pull(estimate) %>%  print()
 
-# Do pivot_wider on the table we just made. 
-us_total_ancestries2 <- us_ancestries_totals %>% select(-GEOID, -NAME, -variable, -moe) %>% rename(label=variable.y) %>% pivot_wider(names_from=label, values_from = c(estimate), names_sep="_") %>%  janitor::clean_names() %>% print()
+# Save the total number of people in the U.S. who are of "our ancestry," save it as a variable.
+us_total_our_anc <- us_ancestries_totals %>% rename(label=variable.y) %>%  filter(str_detect(label, our_ancestry)) %>% pull(estimate) %>% print()
 
-# Fix our column names
-colnames(us_total_ancestries2) <- gsub("estimate_estimate", "estimate", colnames(us_total_ancestries2))
+# Calculate the percentage of people in the U.S. who reported being of our ancestry. 
+pct_us_total_pop_who_have_our_ancestry <- ((us_total_our_anc/us_total_pop)*100) %>% print()
 
-# Now to calculate percentages for each ancestry. Keep in mind, the total figure we're using is the total number of people claiming single ancestry, so the percentages will be the percentage of Americans claiming single ancestry who said they are of XYZ ancestry. 
-pct_us_ancestries <- us_total_ancestries2 %>% mutate(across(2:108, ~ (.x/us_total_ancestries2$estimate_total)*100)) %>%  print()
+# Create our summary phrase. 
+us_summary_phrase <- paste0("The total number of Americans who reported having Ukrainian ancestry is ", prettyNum(us_total_our_anc, big.mark=","), ". That equals about ", round(pct_us_total_pop_who_have_our_ancestry,digits=1), "% of the total U.S. population, according to the 2019 5-year ACS data.") %>% print()
 
-# Update the column names
-names(pct_us_ancestries)[c(2:108)] <- gsub("estimate", "pct", names(pct_us_ancestries)[c(2:108)]) %>%  print()
+```
 
-head(pct_us_ancestries)
 
-# Now we can see the table.
-View(pct_us_ancestries)
+```{r state_level_data, include=FALSE, eval=TRUE, echo=FALSE}
+
+# Now, let's move on to state-level numbers. 
+
+# Now let's ping the Census API using tidycensus and download the data for our variables for our state. 
+our_state_ancestries <- get_acs(geography = "state", year = our_data_year, survey = our_survey, variables = varlist, geometry = FALSE)  %>% filter(str_detect(NAME, our_state)) %>% print()
+
+# Merge our_state_ancestries with our table of variable label names from earlier. 
+our_state_ancestries_totals <- merge(x = our_state_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>%  print()
+
+# Save the total state population as a variable. 
+our_state_total_pop <- our_state_ancestries_totals %>% rename(label=variable.y) %>%  filter(label=="Estimate!!Total:") %>%  pull(estimate) %>%  print()
+
+# Save the total number of people in our state who reported being of "our ancestry."
+our_state_total_our_anc <- our_state_ancestries_totals %>% rename(label=variable.y) %>%  filter(str_detect(label, our_ancestry)) %>% pull(estimate)  %>% print()
+
+# Calculate the percentage.
+pct_our_state_total_pop_who_have_our_ancestry <- ((our_state_total_our_anc/our_state_total_pop)*100) %>% print()
+
+# Create our summary for state-level data. 
+our_state_summary <- paste0("The total number of people in ", our_state, " who reported having ", our_ancestry, " ancestry is ", prettyNum(our_state_total_our_anc, big.mark=","), ". That represents ", round(pct_our_state_total_pop_who_have_our_ancestry, 1), "% of ", our_state, "'s total population, according to the 5-year ACS data.") %>% print()
+
+```
+
+```{r msa_level_data, include=FALSE, eval=TRUE, echo=FALSE}
+
+# Now, let's move on to data at the level of metropolitan (or micropolitan) statistical areas, or MSA's. 
+
+# Now let's ping the Census API using tidycensus and download the data for our variables. 
+our_msa_ancestries <- get_acs(geography = "metropolitan statistical area/micropolitan statistical area", year = our_data_year, survey = our_survey, variables = varlist, geometry = FALSE)  %>% filter(str_detect(NAME, paste0(" ", our_state_abbreviation, " "))) %>% filter(str_detect(NAME, our_major_city)) %>% print()
+
+# Merge with our table of variable label names. 
+our_msa_ancestries_totals <- merge(x = our_msa_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>%  print()
+
+# Save the total MSA population as a variable. 
+our_msa_total_pop <- our_msa_ancestries_totals %>% rename(label=variable.y) %>%  filter(label=="Estimate!!Total:") %>%  pull(estimate) %>%  print()
+
+# Save the number of people in our MSA who reported being of "our ancestry"
+our_msa_total_our_anc <- our_msa_ancestries_totals %>% rename(label=variable.y) %>%  filter(str_detect(label, our_ancestry)) %>% pull(estimate) %>% print()
+
+# Calculate the percentage
+pct_our_msa_total_pop_who_have_our_ancestry <- ((our_msa_total_our_anc/our_msa_total_pop)*100) %>% print()
+
+# Create our summary paragraph for MSA-level data. 
+our_msa_summary <- paste0("The total number of people living in the ", our_major_city, " MSA who reported having ", our_ancestry, " ancestry is ", prettyNum(our_msa_total_our_anc, big.mark=","), ". This represents ", round(pct_our_msa_total_pop_who_have_our_ancestry,1), "% of the total population of the MSA, according to the 5-year ACS data.") %>% print()
 
 
 ```
 
-#30
+```{r counties, include=FALSE, eval=TRUE, echo=FALSE}
+
+# Now, let's move on to data at the level of counties. tidycensus and the Census API allow us to pull down the data for all the counties in the U.S. at once (for all 50 states, in other words), but we'll filter down to just the counties in our state.
+
+# Now let's ping the Census API using tidycensus and download the data for our variables. 
+all_us_counties_ancestries <- get_acs(geography = "county", year = our_data_year, survey = our_survey, variables = varlist, geometry = FALSE)  %>% print()
+
+# Merge with our table of variable label names. 
+counties_ancestries_totals <- merge(x = all_us_counties_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>% rename(label="variable.y") %>%  print()
+
+# Do a double filter with dplyr to grab the variables for both the total population and the population who are of our ancestry. 
+counties_total_our_anc1 <- (counties_ancestries_totals %>% filter(label=="Estimate!!Total:" | str_detect(label, our_ancestry))) %>% print()
+
+# Do pivot_wider on the table we just made to make the total population one column and the population of our ancestry a second column. To do this, we get rid of the GEOID, moe and variable fields. 
+counties_total_our_anc2 <- counties_total_our_anc1 %>% select(-GEOID, -moe, -variable) %>% pivot_wider(names_from=label, values_from = estimate, names_sep="_") %>%  rename(our_anc_pop_est=(counties_ancestries_totals %>% filter(str_detect(label, our_ancestry)) %>% group_by(label) %>% summarize(count=n()) %>% pull(label)), total_pop_est="Estimate!!Total:") %>% print()
+
+# Create a new column that is percentage of population of our ancestry. 
+counties_total_our_anc2$pct_our_counties_total_pop_who_have_our_ancestry <- ((((counties_total_our_anc2$our_anc_pop_est)/(counties_total_our_anc2$total_pop_est))*100)) %>% print()
+
+# Create a top 10 list for counties in our state with the highest percentages of people of our chosen ancestry. 
+top_10_counties_with_highest_pcts_of_our_anc <- (counties_total_our_anc2 %>% filter(str_detect(NAME, our_state)) %>% arrange(-pct_our_counties_total_pop_who_have_our_ancestry) %>% slice_head(n= 10)) %>% print()
+
+# Formulate the top 10 we just made into a neat table with knitR's kable command
+knitr::kable(top_10_counties_with_highest_pcts_of_our_anc, col.names=c("County name", "Total population estimate", paste0("Estimated population of ", our_ancestry, " descent"), paste0("Percent of total population with ", our_ancestry, " ancestry")), row.names = FALSE, digits=1, caption=paste0("The 10 counties in ", our_state, " with the highest percentages of population of ", our_ancestry, " descent"))
+
+# Now create a top 10 of the counties in our state with the highest raw numbers of residents of our chosen ancestry. 
+top_10_counties_with_largest_total_pops_of_our_anc <- (counties_total_our_anc2 %>% filter(str_detect(NAME, "Georgia")) %>% arrange(-our_anc_pop_est) %>% slice_head(n=10)) %>% print()
+
+# Now, reformulate that table into a knitR kable. 
+knitr::kable(top_10_counties_with_largest_total_pops_of_our_anc, col.names=c("County name", "Total population estimate", paste0("Estimated population of ", our_ancestry, " descent"), paste0("Percent of total population with ", our_ancestry, " ancestry")), row.names = FALSE, digits=1, caption=paste0("The 10 counties in ", our_state, " with the highest total populations of ", our_ancestry, " descent"))
+
+
+```
+
+```{r cities_or_places, include=FALSE, eval=TRUE, echo=FALSE}
+
+# Now, let's move on to data at the level of cities, or what the Census Bureau calls "places." (Some places are not actually incorporated cities, so be careful about that.)
+
+# Now let's ping the Census API using tidycensus and download the data about our variables. 
+our_cities_ancestries <- get_acs(geography = "place", year = our_data_year, survey = our_survey, state=our_state_abbreviation, variables = varlist, geometry = FALSE)  %>% print()
+
+# Merge with our table of variable label names. 
+cities_ancestries_totals <- merge(x = our_cities_ancestries, y=variable_labels, by.x = "variable", by.y = "name", all = FALSE) %>% rename(label="variable.y") %>%  print()
+
+# Do a double filter with dplyr to grab the variables for both the total population and the population who are of our ancestry. 
+cities_total_our_anc1 <- (cities_ancestries_totals %>% filter(label=="Estimate!!Total:" | str_detect(label, our_ancestry))) %>% print()
+
+# Do pivot_wider on the table we just made to make the total population one column and the population of our ancestry a second column. To do this, we get rid of the GEOID, moe and variable fields. 
+cities_total_our_anc2 <- cities_total_our_anc1 %>% select(-GEOID, -moe, -variable) %>% pivot_wider(names_from=label, values_from = estimate, names_sep="_") %>%  rename(our_anc_pop_est=(cities_ancestries_totals %>% filter(str_detect(label, our_ancestry)) %>% group_by(label) %>% summarize(count=n()) %>% pull(label)), total_pop_est="Estimate!!Total:") %>% print()
+
+# Create a new column that is percentage of population of our ancestry. 
+cities_total_our_anc2$pct_our_cities_total_pop_who_have_our_ancestry <- ((((cities_total_our_anc2$our_anc_pop_est)/(cities_total_our_anc2$total_pop_est))*100)) %>% print()
+
+# Create a top 10 list for cities with the highest percentages of people of our chosen ancestry. 
+top_10_cities_with_highest_pcts_of_our_anc <- (cities_total_our_anc2 %>% arrange(-pct_our_cities_total_pop_who_have_our_ancestry) %>% slice_head(n= 10)) %>% print()
+
+# Formulate the top 10 we just made into a neat table with knitR's kable command
+knitr::kable(top_10_cities_with_highest_pcts_of_our_anc, col.names=c("City or place name", "Total population estimate", paste0("Estimated population of ", our_ancestry, " descent"), paste0("Percent of total population with ", our_ancestry, " ancestry")), row.names = FALSE, digits=1, caption=paste0("The 10 places in ", our_state, " with the highest percentages of population of ", our_ancestry, " descent"))
+
+# Now create a top 10 of the cities with the highest raw numbers of residents of our chosen ancestry. 
+top_10_cities_with_largest_total_pops_of_our_anc <- (cities_total_our_anc2 %>% arrange(-our_anc_pop_est) %>% slice_head(n=10)) %>% print()
+
+# Now, reformulate that table into a knitR kable. 
+knitr::kable(top_10_cities_with_largest_total_pops_of_our_anc, col.names=c("City or place name", "Total population estimate", paste0("Estimated population of ", our_ancestry, " descent"), paste0("Percent of total population with ", our_ancestry, " ancestry")), row.names = FALSE, digits=1, caption=paste0("The 10 places in ", our_state, " with the highest total populations of ", our_ancestry, " descent"))
+
+
+```
+
+
