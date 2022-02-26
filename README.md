@@ -3,8 +3,6 @@ A script for using R to find people of a certain ancestry in Census (American Co
 
 This script uses the R programming language to find the numbers and percentages of the U.S. population who claim to be of a certain ancestry. 
 
-As of right now, our script only looks at the portion of the U.S. population who claim a single ancestry. But many Americans claim multiple ancestries. We hope to improve this table in future revisions to add code to also look at the data concerning Americans who claim multiple ancestries. 
-
 ### About the data
 
 All data in this summary is from the 2019 5-year averages of the [American Community Survey](https://www.census.gov/programs-surveys/acs) done by the U.S. Census Bureau.
@@ -17,7 +15,7 @@ The 5-year average data averages each metric over the previous five years to pro
 
 ACS data is an estimate. The confidence interval is 90%. The Census Bureau publishes margins of error for each metric presented here. Always remember, the smaller the sample the estimate is taken from, the wider the margin of error. 
 
-Much of the data in this summary specifically comes from ACS table B04004, [which you can read more about at here](https://censusreporter.org/tables/B04004/), "People Reporting Single Ancestry." 
+The data we'll be working with comes from ACS table B04006, [which you can read more about at here](https://censusreporter.org/tables/B04006/), "People Reporting Ancestry." 
 
 ### About this script
 
